@@ -184,33 +184,53 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+            BluetoothGattCharacteristic caracteristica = null;
             if (status == BluetoothGatt.GATT_SUCCESS) {
-                BluetoothGattService service = gatt.getService(SERVICE_UUID);
-                if (service != null) {
-                    BluetoothGattCharacteristic characteristic = service.getCharacteristic(CHARACTERISTIC_UUID);
-                    if (characteristic != null) {
-                        if (ActivityCompat.checkSelfPermission(MainActivity.this, android.Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-                            // TODO: Consider calling
-                            //    ActivityCompat#requestPermissions
-                            // here to request the missing permissions, and then overriding
-                            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-                            //                                          int[] grantResults)
-                            // to handle the case where the user grants the permission. See the documentation
-                            // for ActivityCompat#requestPermissions for more details.
-                            return;
+
+                List<BluetoothGattService> services = gatt.getServices();
+                if (services != null) {
+                    for (BluetoothGattService service : services) {
+                        // Imprimir el UUID del servicio
+                        List<BluetoothGattCharacteristic> characteristic = service.getCharacteristics();
+
+                        for (BluetoothGattCharacteristic caracte : characteristic){
+                            int properties = caracte.getProperties();
+                            if ((properties & BluetoothGattCharacteristic.PROPERTY_NOTIFY) > 0) {
+                                caracteristica = caracte;
+                                Log.d("Bluetooth", "Characteristic UUID: " + caracte.getUuid().toString());
+                                Log.d("Bluetooth", "Tipo de caracteriostica: " + caracte.getProperties());
+                                if (caracte != null) {
+                                    if (ActivityCompat.checkSelfPermission(MainActivity.this, android.Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                                        // TODO: Consider calling
+                                        //    ActivityCompat#requestPermissions
+                                        // here to request the missing permissions, and then overriding
+                                        //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                                        //                                          int[] grantResults)
+                                        // to handle the case where the user grants the permission. See the documentation
+                                        // for ActivityCompat#requestPermissions for more details.
+                                        return;
+                                    }
+                                    gatt.setCharacteristicNotification(caracte, true);
+                                }
+                            }
+
                         }
-                        gatt.setCharacteristicNotification(characteristic, true);
+
+                        // Aquí puedes agregar más lógica para listar las características del servicio, si es necesario
+
                     }
+
+
                 }
             }
         }
 
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
-            if (CHARACTERISTIC_UUID.equals(characteristic.getUuid())) {
+
                 byte[] data = characteristic.getValue();
                 runOnUiThread(() -> textView.setText("Dato recibido: " + new String(data)));
-            }
+
         }
     };
 }
