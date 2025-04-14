@@ -43,6 +43,13 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "BLEApp";
     private static final UUID SERVICE_UUID = UUID.fromString("0000180d-0000-1000-8000-00805f9b34fb"); // Ejemplo: Servicio Heart Rate
     private static final UUID CHARACTERISTIC_UUID = UUID.fromString("00002a37-0000-1000-8000-00805f9b34fb"); // Característica notificable
+    private String impresoraDevice = "G5-41180127";
+
+    private ListView serviceListView;
+    private ListView characteristicListView;
+    private ArrayAdapter<String> serviceAdapter;
+    private ArrayAdapter<String> characteristicAdapter;
+    private List<BluetoothGattService> gattServices;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -51,6 +58,9 @@ public class MainActivity extends AppCompatActivity {
 
         textView = findViewById(R.id.data_text);
         ListView listView = findViewById(R.id.list_device);
+
+        serviceListView = (ListView) findViewById( R.id.list_services);
+        characteristicListView = (ListView) findViewById(R.id.list_characteristics);
 
         BluetoothManager bluetoothManager = (BluetoothManager) getSystemService(BLUETOOTH_SERVICE);
         bluetoothAdapter = bluetoothManager.getAdapter();
@@ -62,9 +72,19 @@ public class MainActivity extends AppCompatActivity {
 
         listView.setOnItemClickListener((parent, view, position, id) -> connectToDevice(deviceList.get(position)));
 
-        if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+        serviceAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1);
+        serviceListView.setAdapter(serviceAdapter);
+
+        characteristicAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1);
+        characteristicListView.setAdapter(characteristicAdapter);
+
+        serviceListView.setOnItemClickListener((parent, view, position, id) -> displayCharacteristics(gattServices.get(position)));
+
+
+
+        /*1if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.BLUETOOTH_CONNECT}, 3);
-        }
+        }*/
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
         } else {
@@ -84,6 +104,18 @@ public class MainActivity extends AppCompatActivity {
                Log.d("BLUETOOTH", "*****************  Permisos denegados ********************");
             }
         }
+    }
+
+    private void displayCharacteristics(BluetoothGattService service){
+        runOnUiThread(() ->{
+            characteristicAdapter.clear();
+            if (service != null){
+                List<BluetoothGattCharacteristic> characteristics = service.getCharacteristics();
+                for (BluetoothGattCharacteristic characteristic : characteristics){
+                    characteristicAdapter.add(characteristic.getUuid().toString());
+                }
+            }
+        });
     }
 
     public void startScan() {
@@ -143,30 +175,25 @@ public class MainActivity extends AppCompatActivity {
                 adapter.add(device.getName() + " - " + device.getAddress());
                 adapter.notifyDataSetChanged();
                 Log.d("BLUETOOTH", deviceList.toString());
+
             }
+
         }
 
     };
 
     private void connectToDevice(BluetoothDevice device) {
-        if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
+        if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             return;
         }
-        bluetoothGatt = device.connectGatt(this, false, gattCallback);
+        bluetoothGatt = device.connectGatt(this, true, gattCallback);
     }
 
     private final BluetoothGattCallback gattCallback = new BluetoothGattCallback() {
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
             if (newState == BluetoothGatt.STATE_CONNECTED) {
-                if (ActivityCompat.checkSelfPermission(MainActivity.this, android.Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                if (ActivityCompat.checkSelfPermission(MainActivity.this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                     // TODO: Consider calling
                     //    ActivityCompat#requestPermissions
                     // here to request the missing permissions, and then overriding
@@ -184,45 +211,27 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public void onServicesDiscovered(BluetoothGatt gatt, int status) {
-            BluetoothGattCharacteristic caracteristica = null;
             if (status == BluetoothGatt.GATT_SUCCESS) {
-
-                List<BluetoothGattService> services = gatt.getServices();
-                if (services != null) {
-                    for (BluetoothGattService service : services) {
-                        // Imprimir el UUID del servicio
-                        List<BluetoothGattCharacteristic> characteristic = service.getCharacteristics();
-
-                        for (BluetoothGattCharacteristic caracte : characteristic){
-                            int properties = caracte.getProperties();
-                            if ((properties & BluetoothGattCharacteristic.PROPERTY_NOTIFY) > 0) {
-                                caracteristica = caracte;
-                                Log.d("Bluetooth", "Characteristic UUID: " + caracte.getUuid().toString());
-                                Log.d("Bluetooth", "Tipo de caracteriostica: " + caracte.getProperties());
-                                if (caracte != null) {
-                                    if (ActivityCompat.checkSelfPermission(MainActivity.this, android.Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-                                        // TODO: Consider calling
-                                        //    ActivityCompat#requestPermissions
-                                        // here to request the missing permissions, and then overriding
-                                        //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-                                        //                                          int[] grantResults)
-                                        // to handle the case where the user grants the permission. See the documentation
-                                        // for ActivityCompat#requestPermissions for more details.
-                                        return;
-                                    }
-                                    gatt.setCharacteristicNotification(caracte, true);
-                                }
-                            }
-
-                        }
-
-                        // Aquí puedes agregar más lógica para listar las características del servicio, si es necesario
-
-                    }
-
-
-                }
+                gattServices = gatt.getServices();
+                displayServices(gattServices);
+            } else {
+                Log.w(TAG, "onServicesDiscovered received: " + status);
             }
+        }
+
+        private void displayServices(List<BluetoothGattService> services) {
+            runOnUiThread(() -> {
+                serviceAdapter.clear();
+                if (services != null && !services.isEmpty()) {
+                    for (BluetoothGattService service : services) {
+                        serviceAdapter.add("Service: " + service.getUuid().toString());
+                    }
+                    serviceAdapter.notifyDataSetChanged();
+                } else {
+                    serviceAdapter.add("No services discovered");
+                    serviceAdapter.notifyDataSetChanged();
+                }
+            });
         }
 
         @Override
