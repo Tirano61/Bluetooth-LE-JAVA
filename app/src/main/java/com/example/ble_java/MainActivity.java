@@ -27,6 +27,7 @@ import android.widget.TextView;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 public class MainActivity extends AppCompatActivity {
@@ -88,7 +89,7 @@ public class MainActivity extends AppCompatActivity {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
         } else {
-            startScan();
+            attemptConnectionToPairedPrinter();
         }
 
 
@@ -125,13 +126,16 @@ public class MainActivity extends AppCompatActivity {
             handler.postDelayed(() -> {
                 scanning = false;
                 if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                    // TODO: Consider calling
-                    //    ActivityCompat#requestPermissions
-                    // here to request the missing permissions, and then overriding
-                    //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-                    //                                          int[] grantResults)
-                    // to handle the case where the user grants the permission. See the documentation
-                    // for ActivityCompat#requestPermissions for more details.
+                    Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices();
+                    if (pairedDevices.size() > 0) {
+                        for (BluetoothDevice device : pairedDevices) {
+                            if (!deviceList.contains(device) && device.getName() != null) { // Verificar si ya está en la lista
+                                deviceList.add(device);
+                                adapter.add("(Enlazado) " + device.getName() + " - " + device.getAddress()); // Indicar que está enlazado
+                            }
+                        }
+                        attemptConnectionToPairedPrinter();
+                    }
                     return;
                 }
                 bluetoothLeScanner.stopScan(scanCallback);
@@ -182,11 +186,33 @@ public class MainActivity extends AppCompatActivity {
 
     };
 
+    public void attemptConnectionToPairedPrinter() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices();
+            for (BluetoothDevice device : pairedDevices) {
+                if (device.getName() != null && device.getName().equals(impresoraDevice)) {
+                    Log.i(TAG, "Impresora enlazada encontrada: " + device.getName());
+                    connectToDevice(device); // Intentar conectar directamente
+                    return; // Salir después de intentar la conexión
+                }
+            }
+            // Si no se encontró la impresora enlazada, iniciar el escaneo
+            Log.i(TAG, "Impresora no enlazada. Iniciando escaneo...");
+            startScan(); // Llama a tu método startScan() original (sin modificaciones)
+        } else {
+            Log.e(TAG, "Permiso BLUETOOTH_CONNECT no concedido. No se puede buscar dispositivos enlazados.");
+            // Manejar el error de permiso...
+        }
+    }
+
+    // Modifica tu método connectToDevice para reflejar que ya conocemos el dispositivo
     private void connectToDevice(BluetoothDevice device) {
-        if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            Log.e(TAG, "Permiso BLUETOOTH_CONNECT no concedido en connectToDevice.");
             return;
         }
-        bluetoothGatt = device.connectGatt(this, true, gattCallback);
+        Log.d(TAG, "Intentando conectar a (directo): " + device.getName() + " - " + device.getAddress());
+        bluetoothGatt = device.connectGatt(this, false, gattCallback);  // `false` para no auto-conectar
     }
 
     private final BluetoothGattCallback gattCallback = new BluetoothGattCallback() {
@@ -194,13 +220,6 @@ public class MainActivity extends AppCompatActivity {
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
             if (newState == BluetoothGatt.STATE_CONNECTED) {
                 if (ActivityCompat.checkSelfPermission(MainActivity.this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                    // TODO: Consider calling
-                    //    ActivityCompat#requestPermissions
-                    // here to request the missing permissions, and then overriding
-                    //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-                    //                                          int[] grantResults)
-                    // to handle the case where the user grants the permission. See the documentation
-                    // for ActivityCompat#requestPermissions for more details.
                     return;
                 }
                 gatt.discoverServices();
