@@ -6,6 +6,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import android.Manifest;
+import android.app.AlertDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
@@ -21,12 +22,17 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.ListView;
 import android.widget.TextView;
 
+import com.dothantech.lpapi.LPAPI;
+
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -43,8 +49,8 @@ public class MainActivity extends AppCompatActivity {
 
     private static final long SCAN_PERIOD = 10000; // 10 segundos
     private static final String TAG = "BLEApp";
-    private static final UUID SERVICE_UUID = UUID.fromString("0000180d-0000-1000-8000-00805f9b34fb"); // Ejemplo: Servicio Heart Rate
-    private static final UUID CHARACTERISTIC_UUID = UUID.fromString("00002a37-0000-1000-8000-00805f9b34fb"); // Característica notificable
+    private static final UUID SERVICE_UUID = UUID.fromString("49535343-fe7d-4ae5-8fa9-9fafd205e455"); // Ejemplo: Servicio Heart Rate
+    private static final UUID CHARACTERISTIC_UUID = UUID.fromString("49535343-8841-43f4-a8d4-ecbe34729bb3"); // Característica notificable
     private String impresoraDevice = "G5-41180127";
 
     private ListView serviceListView;
@@ -53,13 +59,44 @@ public class MainActivity extends AppCompatActivity {
     private ArrayAdapter<String> characteristicAdapter;
     private List<BluetoothGattService> gattServices;
 
+    private Button button2;
+    private LPAPI api;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        api = LPAPI.Factory.createInstance();
+
         textView = findViewById(R.id.data_text);
         ListView listView = findViewById(R.id.list_device);
+        button2 = (Button)findViewById(R.id.button2);
+        button2.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
+                LayoutInflater inflater = LayoutInflater.from(MainActivity.this);
+                View dialogView = inflater.inflate(R.layout.dialog, null); // Use your actual layout name
+                builder.setView(dialogView);
+                AlertDialog dialog = builder.create();
+
+                // If you have a button inside the custom layout
+                Button okButton = dialogView.findViewById(R.id.button);
+                if (okButton != null) {
+                    okButton.setOnClickListener(new View.OnClickListener() {
+                        @Override
+                        public void onClick(View view) {
+                            // do something
+                            onPrintButtonClicked(view, "Hola Mundo");
+                            dialog.dismiss();
+                        }
+                    });
+                }
+                dialog.show();
+            }
+
+        });
 
         serviceListView = (ListView) findViewById( R.id.list_services);
         characteristicListView = (ListView) findViewById(R.id.list_characteristics);
@@ -122,7 +159,23 @@ public class MainActivity extends AppCompatActivity {
             if (service != null){
                 List<BluetoothGattCharacteristic> characteristics = service.getCharacteristics();
                 for (BluetoothGattCharacteristic characteristic : characteristics){
-                    characteristicAdapter.add(characteristic.getUuid().toString());
+                    StringBuilder characteristicInfo = new StringBuilder();
+                    characteristicInfo.append("UUID: ").append(characteristic.getUuid().toString()).append("\n");
+                    characteristicInfo.append("Properties: ");
+                    if ((characteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_READ) != 0) {
+                        characteristicInfo.append("Read ");
+                    }
+                    if ((characteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_WRITE) != 0) {
+                        characteristicInfo.append("Write ");
+                    }
+                    if ((characteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0) {
+                        characteristicInfo.append("Notify ");
+                    }
+                    if ((characteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_INDICATE) != 0) {
+                        characteristicInfo.append("Indicate ");
+                    }
+                    characteristicAdapter.add(characteristicInfo.toString());
+                    Log.d(TAG, "Characteristic Info: " + characteristicInfo.toString());
                 }
             }
         });
@@ -249,6 +302,10 @@ public class MainActivity extends AppCompatActivity {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 gattServices = gatt.getServices();
                 displayServices(gattServices);
+                List<String> datos = Arrays.asList("Dato 1", "Dato 2", "Dato 3");
+                List<String> cabecera = Arrays.asList("Cabecera 1", "Cabecera 2");
+                imprimirTexto(datos, cabecera);
+                Log.d(TAG, "Data written successfully: " + datos);
             } else {
                 Log.w(TAG, "onServicesDiscovered received: " + status);
             }
@@ -260,7 +317,9 @@ public class MainActivity extends AppCompatActivity {
                 if (services != null && !services.isEmpty()) {
                     for (BluetoothGattService service : services) {
                         serviceAdapter.add("Service: " + service.getUuid().toString());
+                        Log.d(TAG, "Service: " + service.getUuid().toString());
                     }
+
                     serviceAdapter.notifyDataSetChanged();
                 } else {
                     serviceAdapter.add("No services discovered");
@@ -276,5 +335,80 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(() -> textView.setText("Dato recibido: " + new String(data)));
 
         }
+        @Override
+        public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                Log.d(TAG, "Data write confirmed successfully (callback): " + new String(characteristic.getValue())); // Or log any relevant status or data
+                // If you are sending multiple chunks, send the next chunk here.
+            } else {
+                Log.e(TAG, "Data write failed (callback), status: " + status);
+                // Handle the error: retry, inform the user, etc.
+            }
+        }
     };
+
+    private void writeDataToCharacteristic(String data) {
+        if (bluetoothGatt == null) {
+            Log.e(TAG, "BluetoothGatt is not connected");
+            return;
+        }
+
+        BluetoothGattService service = bluetoothGatt.getService(SERVICE_UUID);
+        if (service == null) {
+            Log.e(TAG, "Service not found");
+            return;
+        }
+
+        BluetoothGattCharacteristic characteristic = service.getCharacteristic(CHARACTERISTIC_UUID);
+        if (characteristic == null) {
+            Log.e(TAG, "Characteristic not found");
+            return;
+        }
+
+        if ((characteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_WRITE) == 0) {
+            Log.e(TAG, "Characteristic does not support write");
+            return;
+        }
+
+        characteristic.setValue(data.getBytes());  // Set the value to be written
+        characteristic.setWriteType(BluetoothGattCharacteristic.PROPERTY_WRITE);
+        boolean success = bluetoothGatt.writeCharacteristic(characteristic);
+        if (success) {
+            List<String> datos = Arrays.asList("Dato 1", "Dato 2", "Dato 3");
+            List<String> cabecera = Arrays.asList("Cabecera 1", "Cabecera 2");
+            imprimirTexto(datos, cabecera);
+            Log.d(TAG, "Data written successfully: " + data);
+        } else {
+            Log.e(TAG, "Failed to write data");
+        }
+    }
+
+    // Example of how to call the writeDataToCharacteristic method
+    public void sendDataToPrinter(String data) {
+        if (bluetoothGatt != null) {
+            writeDataToCharacteristic(data);
+        } else {
+            Log.e(TAG, "Not connected to a device.");
+        }
+    }
+    public void onPrintButtonClicked(View view, String dataToPrint) {
+        List<String> datos = Arrays.asList("Dato 1", "Dato 2", "Dato 3");
+        List<String> cabecera = Arrays.asList("Cabecera 1", "Cabecera 2");
+        imprimirTexto(datos, cabecera);
+        Log.d(TAG, "Data written successfully: " + datos);
+
+    }
+    public void imprimirTexto(List<String> datos, List<String> listaCabecera){
+        ImpresoraBluetooth impresoraBluetooth = new ImpresoraBluetooth(api);
+        String impresion = "";
+        String cabecera = "";
+        for (int i = 0; i < listaCabecera.size(); i++){
+            cabecera = cabecera + listaCabecera.get(0)+"\n";
+        }
+        for (int i = 0; i < datos.size(); i++){
+            impresion = impresion + datos.get(i)+"\n";
+        }
+
+        impresoraBluetooth.printText(impresion, cabecera);
+    }
 }
