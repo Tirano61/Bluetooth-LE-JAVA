@@ -19,6 +19,7 @@ import android.bluetooth.le.ScanResult;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.View;
 import android.widget.ArrayAdapter;
@@ -83,13 +84,21 @@ public class MainActivity extends AppCompatActivity {
 
 
 
-        /*1if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.BLUETOOTH_CONNECT}, 3);
-        }*/
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            // For Android 12 (S) and above, request BLUETOOTH_SCAN and BLUETOOTH_CONNECT
+            if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED ||
+                    ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT}, 3);
+            } else {
+                startScan();
+            }
         } else {
-            attemptConnectionToPairedPrinter();
+            // For Android versions below 12, request ACCESS_FINE_LOCATION
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
+            } else {
+                startScan();
+            }
         }
 
 
@@ -164,13 +173,7 @@ public class MainActivity extends AppCompatActivity {
         public void onScanResult(int callbackType, ScanResult result) {
             BluetoothDevice device = result.getDevice();
             if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                // TODO: Consider calling
-                //    ActivityCompat#requestPermissions
-                // here to request the missing permissions, and then overriding
-                //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-                //                                          int[] grantResults)
-                // to handle the case where the user grants the permission. See the documentation
-                // for ActivityCompat#requestPermissions for more details.
+
                 return;
             }
 
@@ -185,6 +188,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
     };
+
 
     public void attemptConnectionToPairedPrinter() {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
@@ -212,24 +216,36 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         Log.d(TAG, "Intentando conectar a (directo): " + device.getName() + " - " + device.getAddress());
-        bluetoothGatt = device.connectGatt(this, false, gattCallback);  // `false` para no auto-conectar
+        bluetoothGatt = device.connectGatt(this, false, gattCallback, BluetoothDevice.TRANSPORT_LE);  // `false` para no auto-conectar
     }
 
     private final BluetoothGattCallback gattCallback = new BluetoothGattCallback() {
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
-            if (newState == BluetoothGatt.STATE_CONNECTED) {
-                if (ActivityCompat.checkSelfPermission(MainActivity.this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                    return;
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    Log.d(TAG, "Estado de conexión: conectado, status: " + status);
+
+                    if (newState == BluetoothGatt.STATE_CONNECTED) {
+                        if (ActivityCompat.checkSelfPermission(MainActivity.this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                            return;
+                        }
+                        //gatt.discoverServices();
+                        new Handler().postDelayed(() -> gatt.discoverServices(), 2000);
+                    } else if (newState == BluetoothGatt.STATE_DISCONNECTED) {
+                        Log.i(TAG, "Desconectado");
+                    } else {
+                        Log.d(TAG, "Cambio de estado de conexión, newState: " + newState + ", status: " + status); // Añade esto para otros estados
+                    }
                 }
-                gatt.discoverServices();
-            } else if (newState == BluetoothGatt.STATE_DISCONNECTED) {
-                Log.i(TAG, "Desconectado");
-            }
+            });
+
         }
 
         @Override
         public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+            Log.d(TAG, "onServicesDiscovered status: " + status);
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 gattServices = gatt.getServices();
                 displayServices(gattServices);
