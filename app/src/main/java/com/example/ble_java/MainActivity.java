@@ -187,7 +187,7 @@ public class MainActivity extends AppCompatActivity {
             adapter.clear();
             handler.postDelayed(() -> {
                 scanning = false;
-                if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
                     Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices();
                     if (pairedDevices.size() > 0) {
                         for (BluetoothDevice device : pairedDevices) {
@@ -269,7 +269,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         Log.d(TAG, "Intentando conectar a (directo): " + device.getName() + " - " + device.getAddress());
-        bluetoothGatt = device.connectGatt(this, false, gattCallback, BluetoothDevice.TRANSPORT_LE);  // `false` para no auto-conectar
+        bluetoothGatt = device.connectGatt(this, false, gattCallback, BluetoothDevice.DEVICE_TYPE_CLASSIC);  // `false` para no auto-conectar
     }
 
     private final BluetoothGattCallback gattCallback = new BluetoothGattCallback() {
@@ -302,10 +302,6 @@ public class MainActivity extends AppCompatActivity {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 gattServices = gatt.getServices();
                 displayServices(gattServices);
-                List<String> datos = Arrays.asList("Dato 1", "Dato 2", "Dato 3");
-                List<String> cabecera = Arrays.asList("Cabecera 1", "Cabecera 2");
-                imprimirTexto(datos, cabecera);
-                Log.d(TAG, "Data written successfully: " + datos);
             } else {
                 Log.w(TAG, "onServicesDiscovered received: " + status);
             }
@@ -347,53 +343,10 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
-    private void writeDataToCharacteristic(String data) {
-        if (bluetoothGatt == null) {
-            Log.e(TAG, "BluetoothGatt is not connected");
-            return;
-        }
-
-        BluetoothGattService service = bluetoothGatt.getService(SERVICE_UUID);
-        if (service == null) {
-            Log.e(TAG, "Service not found");
-            return;
-        }
-
-        BluetoothGattCharacteristic characteristic = service.getCharacteristic(CHARACTERISTIC_UUID);
-        if (characteristic == null) {
-            Log.e(TAG, "Characteristic not found");
-            return;
-        }
-
-        if ((characteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_WRITE) == 0) {
-            Log.e(TAG, "Characteristic does not support write");
-            return;
-        }
-
-        characteristic.setValue(data.getBytes());  // Set the value to be written
-        characteristic.setWriteType(BluetoothGattCharacteristic.PROPERTY_WRITE);
-        boolean success = bluetoothGatt.writeCharacteristic(characteristic);
-        if (success) {
-            List<String> datos = Arrays.asList("Dato 1", "Dato 2", "Dato 3");
-            List<String> cabecera = Arrays.asList("Cabecera 1", "Cabecera 2");
-            imprimirTexto(datos, cabecera);
-            Log.d(TAG, "Data written successfully: " + data);
-        } else {
-            Log.e(TAG, "Failed to write data");
-        }
-    }
-
-    // Example of how to call the writeDataToCharacteristic method
-    public void sendDataToPrinter(String data) {
-        if (bluetoothGatt != null) {
-            writeDataToCharacteristic(data);
-        } else {
-            Log.e(TAG, "Not connected to a device.");
-        }
-    }
     public void onPrintButtonClicked(View view, String dataToPrint) {
-        List<String> datos = Arrays.asList("Dato 1", "Dato 2", "Dato 3");
+        //sendDataToPrinter();
         List<String> cabecera = Arrays.asList("Cabecera 1", "Cabecera 2");
+        List<String> datos = Arrays.asList("Dato 1", "Dato 2", "Dato 3");
         imprimirTexto(datos, cabecera);
         Log.d(TAG, "Data written successfully: " + datos);
 
